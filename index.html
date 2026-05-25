@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POLARIS — The Winter Express</title>
+  <meta name="description" content="A cinematic winter steam train journey. Limited departures, Winter 2026.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      background: #000;
+      color: #fff;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-overflow-scrolling: touch;
+      overflow-x: hidden;
+    }
+
+    /* 9x viewport tall — slower, more cinematic scroll-to-video mapping */
+    body { height: 900vh; }
+
+    #scrollVideo {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 0;
+      background: #000;
+    }
+
+    /* Vignette — darkened edges + stronger top/bottom bands seat the text
+       against bright snow frames without crushing the cinematic mid-tones */
+    .vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at center, transparent 25%, rgba(0,0,0,0.72) 100%),
+        linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 22%, transparent 72%, rgba(0,0,0,0.65) 100%);
+    }
+
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 36px 48px;
+      color: #fff;
+    }
+
+    .brand {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 22px;
+      letter-spacing: 0.42em;
+      font-weight: 500;
+      /* Layered shadow kept from contrast pass */
+      text-shadow:
+        0 1px 2px rgba(0,0,0,0.6),
+        0 2px 14px rgba(0,0,0,0.55);
+    }
+
+    .menu-btn {
+      display: inline-block;
+      background: none;
+      border: 1px solid rgba(255,255,255,0.35);
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      letter-spacing: 0.35em;
+      cursor: pointer;
+      text-decoration: none;
+      text-transform: uppercase;
+      padding: 12px 22px;
+      transition: background 0.3s ease, border-color 0.3s ease;
+    }
+    .menu-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.65); }
+
+    .text-block {
+      position: fixed;
+      z-index: 2;
+      opacity: 0;
+      transition: none;
+      will-change: transform, opacity;
+      padding: 0 8%;
+      max-width: 720px;
+      /* Base shadow inherited by all children — overridden per-element below */
+      text-shadow:
+        0 1px 2px rgba(0,0,0,0.55),
+        0 2px 14px rgba(0,0,0,0.5);
+    }
+
+    .text-block.left  { left: 0;  bottom: 18%; text-align: left; }
+    .text-block.right { right: 0; bottom: 18%; text-align: right; max-width: 720px; }
+    .text-block.center {
+      left: 50%; top: 50%;
+      text-align: center;
+      max-width: 820px;
+      padding: 0 6%;
+    }
+
+    .text-block .eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      opacity: 0.75;
+      margin-bottom: 18px;
+      font-weight: 400;
+    }
+
+    .text-block h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(40px, 6.2vw, 86px);
+      font-weight: 300;
+      line-height: 1.04;
+      letter-spacing: -0.01em;
+      margin-bottom: 20px;
+      /* Layered shadow kept from contrast pass — tight inner + wide halo for snow */
+      text-shadow:
+        0 1px 2px rgba(0,0,0,0.7),
+        0 2px 18px rgba(0,0,0,0.65),
+        0 6px 48px rgba(0,0,0,0.45);
+    }
+
+    .text-block p {
+      font-size: 16px;
+      line-height: 1.65;
+      max-width: 460px;
+      opacity: 0.88;
+      font-weight: 300;
+      text-shadow:
+        0 1px 2px rgba(0,0,0,0.65),
+        0 2px 14px rgba(0,0,0,0.55);
+    }
+
+    .text-block.right p  { margin-left: auto; }
+    .text-block.center p { margin-left: auto; margin-right: auto; }
+
+    .cta {
+      display: inline-block;
+      margin-top: 30px;
+      padding: 16px 34px;
+      border: 1px solid rgba(255,255,255,0.55);
+      color: #fff;
+      text-decoration: none;
+      font-size: 11px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      transition: background 0.3s ease, letter-spacing 0.3s ease;
+    }
+    .cta:hover { background: rgba(255,255,255,0.12); letter-spacing: 0.42em; }
+
+    /* Loading screen — visible until canplaythrough */
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: #050505;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: #fff;
+      transition: opacity 0.7s ease;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+    .loader-brand {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 18px;
+      letter-spacing: 0.55em;
+      margin-bottom: 28px;
+      opacity: 0.9;
+    }
+    .loader-bar {
+      width: 180px;
+      height: 1px;
+      background: rgba(255,255,255,0.18);
+      overflow: hidden;
+      position: relative;
+    }
+    .loader-bar::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      transform: translateX(-100%);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    .loader-label {
+      margin-top: 18px;
+      font-size: 10px;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      opacity: 0.45;
+    }
+    @keyframes pulse {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    /* Initial scroll hint — fades on first scroll */
+    .scroll-hint {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      color: #fff;
+      font-size: 10px;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      opacity: 0.75;
+      animation: hint 2.2s ease-in-out infinite;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+    @keyframes hint {
+      0%, 100% { transform: translate(-50%, 0); opacity: 0.75; }
+      50%      { transform: translate(-50%, 10px); opacity: 0.3; }
+    }
+
+    /* Progress rail down the right edge */
+    .progress {
+      position: fixed;
+      top: 0; right: 0;
+      width: 2px;
+      height: 100vh;
+      z-index: 9;
+      background: rgba(255,255,255,0.08);
+    }
+    .progress-fill {
+      width: 100%;
+      height: 0%;
+      background: rgba(255,255,255,0.85);
+      will-change: height;
+    }
+
+    @media (max-width: 768px) {
+      nav { padding: 22px 24px; }
+      .brand { font-size: 15px; letter-spacing: 0.35em; }
+      .menu-btn { padding: 10px 16px; font-size: 9px; }
+      .text-block { padding: 0 7%; }
+      .text-block.left, .text-block.right { bottom: 14%; }
+      .text-block h2 { font-size: clamp(30px, 9vw, 48px); }
+      .text-block p { font-size: 14px; line-height: 1.55; }
+      .text-block .eyebrow { font-size: 9px; margin-bottom: 14px; }
+      .cta { padding: 14px 24px; font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loader" role="status" aria-live="polite">
+    <div class="loader-brand">POLARIS</div>
+    <div class="loader-bar"></div>
+    <div class="loader-label">Boarding</div>
+  </div>
+
+  <video muted playsinline preload="auto" id="scrollVideo">
+    <source src="video.mp4" type="video/mp4">
+  </video>
+
+  <div class="vignette"></div>
+
+  <nav>
+    <div class="brand">POLARIS</div>
+    <a class="menu-btn" href="https://wa.me/966575302761" target="_blank" rel="noopener noreferrer">Inquire</a>
+  </nav>
+
+  <!-- Text blocks: data-start / data-end are fractions of total scroll (0–1) -->
+  <div class="text-block left" data-start="0.04" data-end="0.20">
+    <div class="eyebrow">Winter 2026 — Limited Departures</div>
+    <h2>Through the silence of snow</h2>
+    <p>A cinematic passage through the frozen pines, drawn by the last steam locomotive of its kind.</p>
+  </div>
+
+  <div class="text-block right" data-start="0.22" data-end="0.40">
+    <div class="eyebrow">Heritage in motion</div>
+    <h2>Where steel breathes fire</h2>
+    <p>Hand-forged in 1923. Restored over four winters by master engineers. Every rivet, every gauge — preserved.</p>
+  </div>
+
+  <div class="text-block left" data-start="0.42" data-end="0.60">
+    <div class="eyebrow">The Route</div>
+    <h2>Eight hundred kilometers of stillness</h2>
+    <p>From the frostline of the Northern Cape, through the Vasterlund pass, to the harbor lights of Saintvaal.</p>
+  </div>
+
+  <div class="text-block right" data-start="0.62" data-end="0.80">
+    <div class="eyebrow">On board</div>
+    <h2>An interior carved from quiet</h2>
+    <p>Brass, oak and wool. Tea poured at dusk. Wide windows that frame a world unhurried.</p>
+  </div>
+
+  <div class="text-block center" data-start="0.83" data-end="1.00">
+    <div class="eyebrow">Reservations now open</div>
+    <h2>The Polaris Winter Express</h2>
+    <p>Twelve departures. Forty seats. A journey to be remembered.</p>
+    <a href="https://wa.me/966575302761" class="cta" target="_blank" rel="noopener noreferrer">Reserve your passage</a>
+  </div>
+
+  <div class="scroll-hint">Scroll</div>
+
+  <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+
+  <script>
+    (function () {
+      const video       = document.getElementById('scrollVideo');
+      const loader      = document.getElementById('loader');
+      const textBlocks  = document.querySelectorAll('.text-block');
+      const scrollHint  = document.querySelector('.scroll-hint');
+      const progressEl  = document.getElementById('progressFill');
+
+      // Lerp factor — lower = smoother/heavier glide, higher = snappier
+      const LERP    = 0.08;
+      const EPSILON = 0.0005;
+
+      let videoReady      = false;
+      let scrollHeight    = window.innerHeight;
+      let targetFraction  = 0;   // where scroll says we should be (0–1)
+      let smoothFraction  = 0;   // lerped value actually driving the video
+      let lastSetTime     = -1;
+      let rafId           = null;
+
+      /* ---------- Loading ---------- */
+      function hideLoader() {
+        if (loader.classList.contains('hidden')) return;
+        loader.classList.add('hidden');
+        setTimeout(() => { loader.style.display = 'none'; }, 800);
+      }
+
+      video.addEventListener('canplaythrough', hideLoader, { once: true });
+
+      setTimeout(function poll() {
+        if (videoReady) return;
+        if (video.readyState >= 3) { videoReady = true; hideLoader(); return; }
+        setTimeout(poll, 400);
+      }, 1500);
+
+      setTimeout(hideLoader, 12000);
+
+      /* ---------- Scroll-to-video core ---------- */
+      function recalcHeights() {
+        scrollHeight = Math.max(1, document.body.scrollHeight - window.innerHeight);
+      }
+
+      function readScroll() {
+        targetFraction = Math.min(1, Math.max(0, window.scrollY / scrollHeight));
+        ensureLoop();
+      }
+
+      function render() {
+        // Glide the smoothed fraction toward the scroll target
+        const delta = targetFraction - smoothFraction;
+        if (Math.abs(delta) < EPSILON) {
+          smoothFraction = targetFraction;
+        } else {
+          smoothFraction += delta * LERP;
+        }
+
+        // Video scrub from the smoothed value — only seek on meaningful delta
+        if (video.duration) {
+          const target = smoothFraction * video.duration;
+          if (Math.abs(target - lastSetTime) > 0.015) {
+            video.currentTime = target;
+            lastSetTime = target;
+          }
+        }
+
+        // Text blocks track the smoothed fraction so overlays glide with the video
+        for (let i = 0; i < textBlocks.length; i++) {
+          const block = textBlocks[i];
+          const start = parseFloat(block.dataset.start);
+          const end   = parseFloat(block.dataset.end);
+          const isCenter = block.classList.contains('center');
+
+          if (smoothFraction >= start && smoothFraction <= end) {
+            const progress = (smoothFraction - start) / (end - start);
+            let opacity;
+            if (progress < 0.2)      opacity = progress / 0.2;
+            else if (progress > 0.8) opacity = (1 - progress) / 0.2;
+            else                     opacity = 1;
+
+            const lift = (1 - Math.min(progress / 0.2, 1)) * 24;
+
+            block.style.opacity = opacity;
+            block.style.transform = isCenter
+              ? `translate(-50%, calc(-50% + ${lift}px))`
+              : `translateY(${lift}px)`;
+          } else if (block.style.opacity !== '0') {
+            block.style.opacity = 0;
+            block.style.transform = isCenter
+              ? 'translate(-50%, calc(-50% + 24px))'
+              : 'translateY(24px)';
+          }
+        }
+
+        scrollHint.style.opacity = smoothFraction > 0.015 ? '0' : '';
+        progressEl.style.height  = (smoothFraction * 100) + '%';
+
+        // Keep the loop alive until the lerp catches up
+        if (Math.abs(targetFraction - smoothFraction) > EPSILON) {
+          rafId = requestAnimationFrame(render);
+        } else {
+          rafId = null;
+        }
+      }
+
+      function ensureLoop() {
+        if (rafId === null) rafId = requestAnimationFrame(render);
+      }
+
+      window.addEventListener('scroll', readScroll, { passive: true });
+      window.addEventListener('resize', () => { recalcHeights(); readScroll(); });
+
+      video.addEventListener('loadedmetadata', () => {
+        recalcHeights();
+        readScroll();
+      });
+
+      recalcHeights();
+      readScroll();
+    })();
+  </script>
+</body>
+</html>
