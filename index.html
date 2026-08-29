@@ -31,7 +31,12 @@
       position: fixed;
       top: 0; left: 0;
       width: 100vw;
+      /* 100vh on iOS Safari is the "large" viewport (URL bar hidden).
+         100dvh tracks the actual visible viewport, so the video fills
+         correctly while the URL bar shows/hides. Fallback stays for
+         browsers that don't support dvh. */
       height: 100vh;
+      height: 100dvh;
       object-fit: cover;
       z-index: 0;
       background: #000;
@@ -85,7 +90,11 @@
       padding: 12px 22px;
       transition: background 0.3s ease, border-color 0.3s ease;
     }
-    .menu-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.65); }
+    /* Hover states — pointer-only, so a tap on a touch device doesn't
+       leave the button visually "stuck" after finger-up */
+    @media (hover: hover) {
+      .menu-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.65); }
+    }
 
     .text-block {
       position: fixed;
@@ -159,7 +168,9 @@
       text-transform: uppercase;
       transition: background 0.3s ease, letter-spacing 0.3s ease;
     }
-    .cta:hover { background: rgba(255,255,255,0.12); letter-spacing: 0.42em; }
+    @media (hover: hover) {
+      .cta:hover { background: rgba(255,255,255,0.12); letter-spacing: 0.42em; }
+    }
 
     /* Loading screen — visible until canplaythrough */
     #loader {
@@ -236,6 +247,7 @@
       top: 0; right: 0;
       width: 2px;
       height: 100vh;
+      height: 100dvh;
       z-index: 9;
       background: rgba(255,255,255,0.08);
     }
@@ -341,14 +353,41 @@
       }
 
       video.addEventListener('canplaythrough', hideLoader, { once: true });
+      // Mobile-friendly: hide loader as soon as the first frame is ready
+      // (canplaythrough often never fires on iOS Safari for large videos)
+      video.addEventListener('loadeddata', hideLoader, { once: true });
 
       setTimeout(function poll() {
         if (videoReady) return;
-        if (video.readyState >= 3) { videoReady = true; hideLoader(); return; }
+        // readyState 2 = HAVE_CURRENT_DATA (first frame). Good enough to reveal.
+        if (video.readyState >= 2) { videoReady = true; hideLoader(); return; }
         setTimeout(poll, 400);
       }, 1500);
 
       setTimeout(hideLoader, 12000);
+
+      /* ---------- iOS Safari decoder unlock ----------
+         On iOS, video.currentTime is a silent no-op until the video has
+         been asked to play at least once. Without this, the video stays
+         stuck on frame 0 no matter how the user scrolls. We warm the
+         decoder on the first user gesture, then immediately pause so
+         scroll drives the frames from there on. */
+      let scrubUnlocked = false;
+      function unlockScrub() {
+        if (scrubUnlocked) return;
+        scrubUnlocked = true;
+        try {
+          const p = video.play();
+          if (p && typeof p.then === 'function') {
+            p.then(() => video.pause()).catch(() => { /* browser blocked play — scrub may still work */ });
+          } else {
+            video.pause();
+          }
+        } catch (e) { /* older browsers — nothing to do */ }
+      }
+      ['touchstart', 'touchend', 'click', 'scroll'].forEach(function (evt) {
+        window.addEventListener(evt, unlockScrub, { once: true, passive: true });
+      });
 
       /* ---------- Scroll-to-video core ---------- */
       function recalcHeights() {
@@ -423,6 +462,16 @@
 
       window.addEventListener('scroll', readScroll, { passive: true });
       window.addEventListener('resize', () => { recalcHeights(); readScroll(); });
+      // iOS URL bar toggling changes the visible viewport mid-scroll without
+      // firing a normal resize. visualViewport tells us the real box, so we
+      // recalculate the scroll fraction and keep the video position stable.
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', () => { recalcHeights(); readScroll(); });
+      }
+      // Orientation change on mobile — recalc after the browser settles.
+      window.addEventListener('orientationchange', () => {
+        setTimeout(() => { recalcHeights(); readScroll(); }, 250);
+      });
 
       video.addEventListener('loadedmetadata', () => {
         recalcHeights();
